@@ -6,6 +6,7 @@ package com.bbva.utils.filter.model;
 public class Director {
     private String name;
     private String lastName;
+    private Awards awards;
 
     public String getName() {
         return name;
@@ -21,5 +22,13 @@ public class Director {
 
     public void setLastName(String lastName) {
         this.lastName = lastName;
+    }
+
+    public Awards getAwards() {
+        return awards;
+    }
+
+    public void setAwards(Awards awards) {
+        this.awards = awards;
     }
 }
