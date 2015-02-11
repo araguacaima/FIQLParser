@@ -22,14 +22,6 @@ package com.bbva.utils.fiql.parser;
  * under the License.
  */
 
-import org.apache.commons.beanutils.BeanUtils;
-import org.apache.commons.beanutils.PropertyUtils;
-import org.apache.commons.beanutils.PropertyUtilsBean;
-import org.apache.commons.collections.Predicate;
-import org.apache.cxf.jaxrs.ext.search.*;
-
-
-import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -39,302 +31,323 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.commons.collections.Predicate;
+import org.apache.cxf.jaxrs.ext.search.ConditionType;
+import org.apache.cxf.jaxrs.ext.search.PrimitiveSearchCondition;
+import org.apache.cxf.jaxrs.ext.search.PrimitiveStatement;
+import org.apache.cxf.jaxrs.ext.search.SearchCondition;
+import org.apache.cxf.jaxrs.ext.search.SearchUtils;
+
 /**
- * Simple search condition comparing primitive objects or complex object by its getters. For details see
- * {@link #isMet(Object)} description.
+ * Simple search condition comparing primitive objects or complex object by its
+ * getters. For details see {@link #isMet(Object)} description.
  *
- * @param <T> type of search condition.
+ * @param <T>
+ *            type of search condition.
  */
 public class ExtendedSearchCondition<T> implements SearchCondition<T> {
 
-    private static Set<ConditionType> supportedTypes = new HashSet<ConditionType>();
+	private static Set<ConditionType> supportedTypes = new HashSet<ConditionType>();
 
-    static {
-        supportedTypes.add(ConditionType.EQUALS);
-        supportedTypes.add(ConditionType.NOT_EQUALS);
-        supportedTypes.add(ConditionType.GREATER_THAN);
-        supportedTypes.add(ConditionType.GREATER_OR_EQUALS);
-        supportedTypes.add(ConditionType.LESS_THAN);
-        supportedTypes.add(ConditionType.LESS_OR_EQUALS);
-        supportedTypes.add(ConditionType.CUSTOM);
-    }
+	static {
+		supportedTypes.add(ConditionType.EQUALS);
+		supportedTypes.add(ConditionType.NOT_EQUALS);
+		supportedTypes.add(ConditionType.GREATER_THAN);
+		supportedTypes.add(ConditionType.GREATER_OR_EQUALS);
+		supportedTypes.add(ConditionType.LESS_THAN);
+		supportedTypes.add(ConditionType.LESS_OR_EQUALS);
+		supportedTypes.add(ConditionType.CUSTOM);
+	}
 
-    private ConditionType joiningType = ConditionType.AND;
-    private T condition;
+	private final ConditionType joiningType = ConditionType.AND;
+	private final T condition;
 
-    private List<SearchCondition<T>> scts;
+	private final List<SearchCondition<T>> scts;
 
-    /**
-     * Creates search condition with same operator (equality, inequality) applied in all comparison; see
-     * {@link #isMet(Object)} for details of comparison.
-     *
-     * @param cType     shared condition type
-     * @param condition template object
-     */
-    public ExtendedSearchCondition(ConditionType cType, T condition) {
-        if (cType == null) {
-            throw new IllegalArgumentException("cType is null");
-        }
-        if (condition == null) {
-            throw new IllegalArgumentException("condition is null");
-        }
-        if (!supportedTypes.contains(cType)) {
-            throw new IllegalArgumentException("unsupported condition type: " + cType.name());
-        }
-        this.condition = condition;
-        scts = createConditions(null, cType);
+	/**
+	 * Creates search condition with same operator (equality, inequality)
+	 * applied in all comparison; see {@link #isMet(Object)} for details of
+	 * comparison.
+	 *
+	 * @param cType
+	 *            shared condition type
+	 * @param condition
+	 *            template object
+	 */
+	public ExtendedSearchCondition(final ConditionType cType, final T condition) {
+		if (cType == null) {
+			throw new IllegalArgumentException("cType is null");
+		}
+		if (condition == null) {
+			throw new IllegalArgumentException("condition is null");
+		}
+		if (!supportedTypes.contains(cType)) {
+			throw new IllegalArgumentException("unsupported condition type: " + cType.name());
+		}
+		this.condition = condition;
+		scts = createConditions(null, cType);
 
-    }
+	}
 
-    /**
-     * Creates search condition with different operators (equality, inequality etc) specified for each getter;
-     * see {@link #isMet(Object)} for details of comparison. Cannot be used for primitive T type due to
-     * per-getter comparison strategy.
-     *
-     * @param getters2operators getters names and operators to be used with them during comparison
-     * @param condition         template object
-     */
-    public ExtendedSearchCondition(Map<String, ConditionType> getters2operators, T condition) {
-        if (getters2operators == null) {
-            throw new IllegalArgumentException("getters2operators is null");
-        }
-        if (condition == null) {
-            throw new IllegalArgumentException("condition is null");
-        }
-        if (isPrimitive(condition)) {
-            throw new IllegalArgumentException("mapped operators strategy is "
-                    + "not supported for primitive type "
-                    + condition.getClass().getName());
-        }
-        this.condition = condition;
-        for (ConditionType ct : getters2operators.values()) {
-            if (!supportedTypes.contains(ct)) {
-                throw new IllegalArgumentException("unsupported condition type: " + ct.name());
-            }
-        }
-        scts = createConditions(getters2operators, null);
-    }
+	/**
+	 * Creates search condition with different operators (equality, inequality
+	 * etc) specified for each getter; see {@link #isMet(Object)} for details of
+	 * comparison. Cannot be used for primitive T type due to per-getter
+	 * comparison strategy.
+	 *
+	 * @param getters2operators
+	 *            getters names and operators to be used with them during
+	 *            comparison
+	 * @param condition
+	 *            template object
+	 */
+	public ExtendedSearchCondition(final Map<String, ConditionType> getters2operators, final T condition) {
+		if (getters2operators == null) {
+			throw new IllegalArgumentException("getters2operators is null");
+		}
+		if (condition == null) {
+			throw new IllegalArgumentException("condition is null");
+		}
+		if (isPrimitive(condition)) {
+			throw new IllegalArgumentException("mapped operators strategy is " + "not supported for primitive type "
+					+ condition.getClass().getName());
+		}
+		this.condition = condition;
+		for (final ConditionType ct : getters2operators.values()) {
+			if (!supportedTypes.contains(ct)) {
+				throw new IllegalArgumentException("unsupported condition type: " + ct.name());
+			}
+		}
+		scts = createConditions(getters2operators, null);
+	}
 
-    public T getCondition() {
-        return condition;
-    }
+	public T getCondition() {
+		return condition;
+	}
 
-    /**
-     * {@inheritDoc}
-     * <p/>
-     * When constructor with map is used it returns null.
-     */
-    public ConditionType getConditionType() {
-        if (scts.size() > 1) {
-            return joiningType;
-        } else {
-            return scts.get(0).getStatement().getCondition();
-        }
-    }
+	/**
+	 * {@inheritDoc}
+	 * <p/>
+	 * When constructor with map is used it returns null.
+	 */
+	public ConditionType getConditionType() {
+		if (scts.size() > 1) {
+			return joiningType;
+		} else {
+			return scts.get(0).getStatement().getCondition();
+		}
+	}
 
-    public List<SearchCondition<T>> getSearchConditions() {
-        if (scts.size() > 1) {
-            return Collections.unmodifiableList(scts);
-        } else {
-            return null;
-        }
-    }
+	public List<SearchCondition<T>> getSearchConditions() {
+		if (scts.size() > 1) {
+			return Collections.unmodifiableList(scts);
+		} else {
+			return null;
+		}
+	}
 
-    private List<SearchCondition<T>> createConditions(Map<String, ConditionType> getters2operators,
-                                                      ConditionType sharedType) {
-        if (isPrimitive(condition)) {
-            return Collections.singletonList(
-                    (SearchCondition<T>) new PrimitiveSearchCondition<T>(null, condition, sharedType, condition));
-        } else {
-            List<SearchCondition<T>> list = new ArrayList<SearchCondition<T>>();
-            Map<String, Object> get2val = getGettersAndValues(condition);
+	private List<SearchCondition<T>> createConditions(final Map<String, ConditionType> getters2operators, final ConditionType sharedType) {
+		if (isPrimitive(condition)) {
+			return Collections.singletonList((SearchCondition<T>) new PrimitiveSearchCondition<T>(null, condition, sharedType, condition));
+		} else {
+			final List<SearchCondition<T>> list = new ArrayList<SearchCondition<T>>();
+			final Map<String, Object> get2val = getGettersAndValues(condition);
 
-            for (final String getter : get2val.keySet()) {
-                ConditionType conditionType = null;
-                if (getters2operators != null) {
-                    conditionType = getters2operators.get(getter);
-                    if (conditionType == null) {
-                        conditionType = find(getters2operators, new Predicate() {
-                            @Override
-                            public boolean evaluate(Object o) {
-                                return o != null && ((String) o).startsWith(getter + ".");
-                            }
-                        });
-                    }
-                }
-                ConditionType ct = getters2operators == null ? sharedType : conditionType;
-                if (ct == null) {
-                    continue;
-                }
-                Object rval = get2val.get(getter);
-                if (rval == null) {
-                    continue;
-                }
-                list.add(new PrimitiveSearchCondition<T>(getter, rval, ct, condition));
+			for (final String getter : get2val.keySet()) {
+				ConditionType conditionType = null;
+				if (getters2operators != null) {
+					conditionType = getters2operators.get(getter);
+					if (conditionType == null) {
+						conditionType = find(getters2operators, new Predicate() {
+							public boolean evaluate(final Object o) {
+								return o != null && ((String) o).startsWith(getter + ".");
+							}
+						});
+					}
+				}
+				final ConditionType ct = getters2operators == null ? sharedType : conditionType;
+				if (ct == null) {
+					continue;
+				}
+				final Object rval = get2val.get(getter);
+				if (rval == null) {
+					continue;
+				}
+				list.add(new PrimitiveSearchCondition<T>(getter, rval, ct, condition));
 
-            }
-            if (list.isEmpty()) {
-                throw new IllegalStateException("This search condition is empty and can not be used");
-            }
-            return list;
-        }
-    }
+			}
+			if (list.isEmpty()) {
+				throw new IllegalStateException("This search condition is empty and can not be used");
+			}
+			return list;
+		}
+	}
 
-    private ConditionType find(Map<String, ConditionType> getters2operators, Predicate keyMapCriteria) {
-        for (String key : getters2operators.keySet()) {
-            if (keyMapCriteria.evaluate(key)) {
-                return getters2operators.get(key);
-            }
-        }
-        return null;
-    }
+	private ConditionType find(final Map<String, ConditionType> getters2operators, final Predicate keyMapCriteria) {
+		for (final String key : getters2operators.keySet()) {
+			if (keyMapCriteria.evaluate(key)) {
+				return getters2operators.get(key);
+			}
+		}
+		return null;
+	}
 
-    /**
-     * Compares given object against template condition object.
-     * <p/>
-     * For primitive type T like String, Number (precisely, from type T located in subpackage of
-     * "java.lang.*") given object is directly compared with template object. Comparison for
-     * {@link ConditionType#EQUALS} requires correct implementation of {@link Object#equals(Object)}, using
-     * inequalities requires type T implementing {@link Comparable}.
-     * <p/>
-     * For other types comparison of given object against template object is done using these <b>getters</b>;
-     * returned "is met" value is <b>conjunction ('and' operator)</b> of comparisons per each getter. Getters
-     * of template object that return null or throw exception are not used in comparison, in extreme if all
-     * getters are excluded it means every given pojo object matches. If
-     * {@link #ExtendedSearchCondition(ConditionType, Object) constructor with shared operator} was used, then
-     * getters are compared using the same operator. If {@link #ExtendedSearchCondition(Map, Object) constructor
-     * with map of operators} was used then for every getter specified operator is used (getters for missing
-     * mapping are ignored). The way that comparison per getter is done depends on operator type per getter -
-     * comparison for {@link ConditionType#EQUALS} requires correct implementation of
-     * {@link Object#equals(Object)}, using inequalities requires that getter type implements
-     * {@link Comparable}.
-     * <p/>
-     * For equality comparison and String type in template object (either being primitive or getter from
-     * complex type) it is allowed to used asterisk at the beginning or at the end of text as wild card (zero
-     * or more of any characters) e.g. "foo*", "*foo" or "*foo*". Inner asterisks are not interpreted as wild
-     * cards.
-     * <p/>
-     * <b>Example:</b>
-     * <p/>
-     * <pre>
-     * SimpleSearchCondition&lt;Integer&gt; ssc = new SimpleSearchCondition&lt;Integer&gt;(
-     *   ConditionType.GREATER_THAN, 10);
-     * ssc.isMet(20);
-     * // true since 20&gt;10
-     *
-     * class Entity {
-     *   public String getName() {...
-     *   public int getLevel() {...
-     *   public String getMessage() {...
-     * }
-     *
-     * Entity template = new Entity("bbb", 10, null);
-     * ssc = new SimpleSearchCondition&lt;Entity&gt;(
-     *   ConditionType.GREATER_THAN, template);
-     *
-     * ssc.isMet(new Entity("aaa", 20, "some mesage"));
-     * // false: is not met, expression '"aaa"&gt;"bbb" and 20&gt;10' is not true
-     * // since "aaa" is not greater than "bbb"; not that message is null in template hence ingored
-     *
-     * ssc.isMet(new Entity("ccc", 30, "other message"));
-     * // true: is met, expression '"ccc"&gt;"bbb" and 30&gt;10' is true
-     *
-     * Map&lt;String,ConditionType&gt; map;
-     * map.put("name", ConditionType.EQUALS);
-     * map.put("level", ConditionType.GREATER_THAN);
-     * ssc = new SimpleSearchCondition&lt;Entity&gt;(
-     *   ConditionType.GREATER_THAN, template);
-     *
-     * ssc.isMet(new Entity("ccc", 30, "other message"));
-     * // false due to expression '"aaa"=="ccc" and 30&gt;10"' (note different operators)
-     *
-     * </pre>
-     *
-     * @throws IllegalAccessException when security manager disallows reflective call of getters.
-     */
-    public boolean isMet(T pojo) {
-        for (SearchCondition<T> sc : scts) {
-            if (!sc.isMet(pojo)) {
-                return false;
-            }
-        }
-        return true;
-    }
+	/**
+	 * Compares given object against template condition object.
+	 * <p/>
+	 * For primitive type T like String, Number (precisely, from type T located
+	 * in subpackage of "java.lang.*") given object is directly compared with
+	 * template object. Comparison for {@link ConditionType#EQUALS} requires
+	 * correct implementation of {@link Object#equals(Object)}, using
+	 * inequalities requires type T implementing {@link Comparable}.
+	 * <p/>
+	 * For other types comparison of given object against template object is
+	 * done using these <b>getters</b>; returned "is met" value is
+	 * <b>conjunction ('and' operator)</b> of comparisons per each getter.
+	 * Getters of template object that return null or throw exception are not
+	 * used in comparison, in extreme if all getters are excluded it means every
+	 * given pojo object matches. If
+	 * {@link #ExtendedSearchCondition(ConditionType, Object) constructor with
+	 * shared operator} was used, then getters are compared using the same
+	 * operator. If {@link #ExtendedSearchCondition(Map, Object) constructor
+	 * with map of operators} was used then for every getter specified operator
+	 * is used (getters for missing mapping are ignored). The way that
+	 * comparison per getter is done depends on operator type per getter -
+	 * comparison for {@link ConditionType#EQUALS} requires correct
+	 * implementation of {@link Object#equals(Object)}, using inequalities
+	 * requires that getter type implements {@link Comparable}.
+	 * <p/>
+	 * For equality comparison and String type in template object (either being
+	 * primitive or getter from complex type) it is allowed to used asterisk at
+	 * the beginning or at the end of text as wild card (zero or more of any
+	 * characters) e.g. "foo*", "*foo" or "*foo*". Inner asterisks are not
+	 * interpreted as wild cards.
+	 * <p/>
+	 * <b>Example:</b>
+	 * <p/>
+	 * 
+	 * <pre>
+	 * SimpleSearchCondition&lt;Integer&gt; ssc = new SimpleSearchCondition&lt;Integer&gt;(
+	 *   ConditionType.GREATER_THAN, 10);
+	 * ssc.isMet(20);
+	 * // true since 20&gt;10
+	 * 
+	 * class Entity {
+	 *   public String getName() {...
+	 *   public int getLevel() {...
+	 *   public String getMessage() {...
+	 * }
+	 * 
+	 * Entity template = new Entity("bbb", 10, null);
+	 * ssc = new SimpleSearchCondition&lt;Entity&gt;(
+	 *   ConditionType.GREATER_THAN, template);
+	 * 
+	 * ssc.isMet(new Entity("aaa", 20, "some mesage"));
+	 * // false: is not met, expression '"aaa"&gt;"bbb" and 20&gt;10' is not true
+	 * // since "aaa" is not greater than "bbb"; not that message is null in template hence ingored
+	 * 
+	 * ssc.isMet(new Entity("ccc", 30, "other message"));
+	 * // true: is met, expression '"ccc"&gt;"bbb" and 30&gt;10' is true
+	 * 
+	 * Map&lt;String,ConditionType&gt; map;
+	 * map.put("name", ConditionType.EQUALS);
+	 * map.put("level", ConditionType.GREATER_THAN);
+	 * ssc = new SimpleSearchCondition&lt;Entity&gt;(
+	 *   ConditionType.GREATER_THAN, template);
+	 * 
+	 * ssc.isMet(new Entity("ccc", 30, "other message"));
+	 * // false due to expression '"aaa"=="ccc" and 30&gt;10"' (note different operators)
+	 *
+	 * </pre>
+	 *
+	 * @throws IllegalAccessException
+	 *             when security manager disallows reflective call of getters.
+	 */
+	public boolean isMet(final T pojo) {
+		for (final SearchCondition<T> sc : scts) {
+			if (!sc.isMet(pojo)) {
+				return false;
+			}
+		}
+		return true;
+	}
 
-    /**
-     * Creates cache of getters from template (condition) object and its values returned during one-pass
-     * invocation. Method isMet() will use its keys to introspect getters of passed pojo object, and values
-     * from map in comparison.
-     *
-     * @return template (condition) object getters mapped to their non-null values
-     */
-    private Map<String, Object> getGettersAndValues(T condition) {
+	/**
+	 * Creates cache of getters from template (condition) object and its values
+	 * returned during one-pass invocation. Method isMet() will use its keys to
+	 * introspect getters of passed pojo object, and values from map in
+	 * comparison.
+	 *
+	 * @return template (condition) object getters mapped to their non-null
+	 *         values
+	 */
+	private Map<String, Object> getGettersAndValues(final T condition) {
 
-        Map<String, Object> getters2values = new HashMap<String, Object>();
-        Beanspector<T> beanspector = new Beanspector<T>(condition);
-        for (String getter : beanspector.getGettersNames()) {
-            Object value = getValue(beanspector, getter, condition);
-            getters2values.put(getter, value);
-        }
-        //we do not need compare class objects
-        getters2values.keySet().remove("class");
-        return getters2values;
-    }
+		final Map<String, Object> getters2values = new HashMap<String, Object>();
+		final Beanspector<T> beanspector = new Beanspector<T>(condition);
+		for (final String getter : beanspector.getGettersNames()) {
+			final Object value = getValue(beanspector, getter, condition);
+			getters2values.put(getter, value);
+		}
+		// we do not need compare class objects
+		getters2values.keySet().remove("class");
+		return getters2values;
+	}
 
-    private Object getValue(Beanspector<T> beanspector, String getter, T pojo) {
-        try {
-            return beanspector.swap(pojo).getValue(getter);
-        } catch (Throwable e) {
-            return null;
-        }
-    }
+	private Object getValue(final Beanspector<T> beanspector, final String getter, final T pojo) {
+		try {
+			return beanspector.swap(pojo).getValue(getter);
+		} catch (final Throwable e) {
+			return null;
+		}
+	}
 
-    private boolean isPrimitive(T pojo) {
-        return pojo.getClass().getName().startsWith("java.lang");
-    }
+	private boolean isPrimitive(final T pojo) {
+		return pojo.getClass().getName().startsWith("java.lang");
+	}
 
-    public List<T> findAll(Collection<T> pojos) {
-        List<T> result = new ArrayList<T>();
-        for (T pojo : pojos) {
-            if (isMet(pojo)) {
-                result.add(pojo);
-            }
-        }
-        return result;
-    }
+	public List<T> findAll(final Collection<T> pojos) {
+		final List<T> result = new ArrayList<T>();
+		for (final T pojo : pojos) {
+			if (isMet(pojo)) {
+				result.add(pojo);
+			}
+		}
+		return result;
+	}
 
-    public String toSQL(String table, String... columns) {
-        if (isPrimitive(condition)) {
-            return null;
-        }
-        StringBuilder sb = new StringBuilder();
+	public String toSQL(final String table, final String... columns) {
+		if (isPrimitive(condition)) {
+			return null;
+		}
+		final StringBuilder sb = new StringBuilder();
 
-        if (table != null) {
-            SearchUtils.startSqlQuery(sb, table, columns);
-        }
+		if (table != null) {
+			SearchUtils.startSqlQuery(sb, table, columns);
+		}
 
-        boolean first = true;
-        for (SearchCondition<T> sc : scts) {
-            PrimitiveStatement ps = sc.getStatement();
-            if (ps.getPropery() == null) {
-                continue;
-            }
-            if (!first) {
-                sb.append(" " + joiningType.toString() + " ");
-            } else {
-                first = false;
-            }
+		boolean first = true;
+		for (final SearchCondition<T> sc : scts) {
+			final PrimitiveStatement ps = sc.getStatement();
+			if (ps.getPropery() == null) {
+				continue;
+			}
+			if (!first) {
+				sb.append(" " + joiningType.toString() + " ");
+			} else {
+				first = false;
+			}
 
-            sb.append(sc.toSQL(null));
-        }
-        return sb.toString();
-    }
+			sb.append(sc.toSQL(null));
+		}
+		return sb.toString();
+	}
 
-    public PrimitiveStatement getStatement() {
-        if (scts.size() == 1) {
-            return scts.get(0).getStatement();
-        } else {
-            return null;
-        }
-    }
+	public PrimitiveStatement getStatement() {
+		if (scts.size() == 1) {
+			return scts.get(0).getStatement();
+		} else {
+			return null;
+		}
+	}
 }
